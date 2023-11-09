@@ -42,6 +42,13 @@ class ContainerScanner
     # pattern used to subtract 'my' when looking in external containers
     no_my = Regexp.new(/my /)
 
+    # squelch results from look/rummage/etc
+    action = proc { |s|
+      if s =~ /^#{preposition.capitalize} the.*#{container.gsub(no_my, '')} you see (?:an?|some) (.*)\.$/ || /^You rummage through.*and see (?:an?|some) (.*)\.$/
+      end
+    }
+    DownstreamHook.add('scanner', action)
+
     # depending on lookverb either use the patterns for external containers or containers in the player's inventory
     case lookverb
     when /look/
@@ -52,6 +59,9 @@ class ContainerScanner
       raw_list = $1
     end
 
+    # remove hook to un-squelch things
+    DownstreamHook.remove('scanner')
+
     # if the container is 'servant' instead generate the raw data via the peer_servant() method
     if container.downcase == 'servant'
       raw_list = peer_servant()
@@ -60,6 +70,7 @@ class ContainerScanner
     # parse the list into an array of strings and then sort
     itemlist = raw_list.split(/(?:,\s|\sand\s)(?:an?|some)\s/)
     itemlist = itemlist.sort_by { |item| item.downcase }
+    itemlist.compact!
     listlength = itemlist.length
 
     # if 'itemfind' arg was specified, generate a second array of strings containing the search string
@@ -70,22 +81,49 @@ class ContainerScanner
       end
       itemlist = itemlist.sort_by { |item| item.downcase }
       itemlist = foundlist
+      itemlist.compact!
       listlength = itemlist.length
     end
 
-    # detect and label duplicate items
-    previtem = ''
-    for index in 0..(listlength - 1) do
-      if previtem.include?(itemlist[index])
-        previtem = itemlist[index]
-        itemlist[index] = itemlist[index] + " (duplicate)"
-      else
-        previtem = itemlist[index]
-      end
-    end
+    # init variables for tracking dupes
+    dupecount = 0
+    total_dupes = 0
+    dupeindex = 1
+    index = 0
 
+    # loop through array
+    while index < listlength
+
+      # detect duplicate items and append "qty" string
+      while dupeindex < listlength && itemlist[index].include?(itemlist[dupeindex])
+
+        # delete the duplicate string and compact the array
+        itemlist.delete_at(dupeindex)
+        itemlist.compact!
+
+        # recalculate the new list length
+        listlength = itemlist.length
+
+        # track dupe count of current item and the total dupes found
+        dupecount += 1
+        total_dupes += 1
+      end
+
+      # if dupes were found, append string at current index
+      itemlist[index] = itemlist[index] + " (Qty: #{dupecount + 1})" if dupecount > 0
+
+      # store current item for use as "previous" item in next loop iteration
+      previtem = itemlist[index]
+
+      # increase index and dupeindex to advance loop
+      index += 1
+      dupeindex = index + 1
+
+      # reset dupecount for next iteration
+      dupecount = 0
+    end
     
-    DRC.message("Showing #{itemlist.length} items matching regex: #{findpattern.to_s}") if findpattern != nil
+    DRC.message("Showing #{itemlist.length + total_dupes} items matching regex: #{findpattern.to_s}") if findpattern != nil
 
     # if the list of items is not empty, print it out
     (itemlist.length > 0) ? print_list(itemlist) : respond('No results.')
@@ -94,10 +132,10 @@ class ContainerScanner
     if preposition == 'rummage' then preposition = 'in' end
 
     # if player is looking inside a personal or external container send this informative message
-    DRC.message("There are #{listlength} items #{preposition} the #{container.gsub(no_my, '')}. This does not include items in sub-containers.") if findpattern == nil && preposition != 'pg'
+    DRC.message("There are #{listlength + total_dupes} items #{preposition} the #{container.gsub(no_my, '')}. This does not include items in sub-containers.") if findpattern == nil && preposition != 'pg'
 
     # if player is scanning a Shadow Servant send this informative message
-    DRC.message("There are #{listlength} items in the #{container.gsub(no_my, '')}. This does not include items inside nested containers (i.e. gems in a pouch inside a backpack).") if findpattern == nil && preposition == 'pg'
+    DRC.message("There are #{listlength + total_dupes} items in the #{container.gsub(no_my, '')}. This does not include items inside nested containers (i.e. gems in a pouch inside a backpack).") if findpattern == nil && preposition == 'pg'
   end
 
   # this method casts Piercing Gaze on the servant and collects the output into a string of comma separated values
@@ -114,6 +152,19 @@ class ContainerScanner
       DRCA.cast_spell({ 'abbrev' => 'ss', 'prep_time' => 5, 'mana' => 1}, @settings)
     end
 
+    # squelch pattern raw Piercing Gaze output from Shadow Servant
+    action = proc { |s|
+      if s =~ /^\s+.*/
+        s
+        DRC.log_window(s, "none")
+        # /Within the belly of the Shadow Servant you see.*/ || /^\s+.*/ || 
+        # /^Your Servant is holding.*/
+      end
+    }
+
+    # activate the squelch
+    DownstreamHook.add('shadow_servant', action)
+
     # cast Piercing Gaze on the servant to view its contents
     DRCA.cast_spell({ 'abbrev' => 'pg', 'mana' => 1, 'prep_time' => 1, 'cast' => 'cast servant'}, @settings)
 
@@ -127,6 +178,7 @@ class ContainerScanner
       case servant_line
       when /^Your Servant is holding.*/
         # This match indicates the last line of results from the servant; break the loop
+        DownstreamHook.remove('shadow_servant')
         doloop = false
       else
         # Append the string with the next item
@@ -134,8 +186,9 @@ class ContainerScanner
       end
     end
 
-    # Delete trailing comma and space
+    # Delete trailing comma and space and any leading articles (a, an, some)
     servant_list.delete_suffix!(', ')
+    servant_list.sub!(/^an? |^some /,"")
 
     # Return the raw string with all of the Shadow Servant's contents
     return servant_list
@@ -152,6 +205,11 @@ class ContainerScanner
       respond(itemlist[index]) if itemlist[index].include?("\(duplicate\)")
     end
   end
+end
+
+before_dying do
+  DownstreamHook.remove('shadow_servant')
+  DownstreamHook.remove('scanner')
 end
 
 ContainerScanner.new
