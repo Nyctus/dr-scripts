@@ -84,8 +84,8 @@ class ContainerScanner
       end
     end
 
-
-    DRC.message("Showing items matchinge regex: #{findpattern.to_s}") if findpattern != nil
+    
+    DRC.message("Showing #{itemlist.length} items matching regex: #{findpattern.to_s}") if findpattern != nil
 
     # if the list of items is not empty, print it out
     (itemlist.length > 0) ? print_list(itemlist) : respond('No results.')
