@@ -6,9 +6,9 @@ class ContainerScanner
 
     arg_definitions = [
     [
-        { name: 'preposition', regex: /\w+/, description: "Containers in inventory: use 'rummage' | External containers: use 'on', 'in', 'under', or 'behind' | Shadow Servant: use 'pg'" },
-        { name: 'container', regex: /\w+/, description: 'Name of external container to interact with. Put multiple words in quotes.' },
-        { name: 'itemfind', regex: /\w+/, optional: true, description: 'Name of item to find. Put multiple words in quotes.' }
+        { name: 'preposition', regex: /\w+/, description: "Preposition or 'rummage' | Shadow Servant: use 'pg'" },
+        { name: 'container', regex: /\w+/, description: 'Container to scan. Put multiple words in quotes (e.g. "my backpack" or "pouch on shelf"). For a Shadow Servant use \'servant\'' },
+        { name: 'itemfind', regex: /\w+/i, optional: true, description: 'Name of item to find. Put multiple words in quotes. Not case-sensitive!' }
       ]
     ]
 
@@ -27,7 +27,7 @@ class ContainerScanner
     lookstring = preposition + " " + container
 
     # generate the regex pattern if itemfind is specified
-    args.itemfind != nil ? findpattern = Regexp.new(args.itemfind) : findpattern = nil
+    if args.itemfind != nil then findpattern = Regexp.new(args.itemfind, Regexp::IGNORECASE) else findpattern = nil end
 
     # choose verb to use when scanning the container
     case preposition
@@ -111,7 +111,7 @@ class ContainerScanner
 
     # if servant is not summoned, summon it
     if servant =~ /I could not/
-      DRCA.cast_spell({ 'abbrev' => 'ss', 'mana' => 100}, @settings)
+      DRCA.cast_spell({ 'abbrev' => 'ss', 'mana' => 1}, @settings)
     end
 
     # cast Piercing Gaze on the servant to view its contents
