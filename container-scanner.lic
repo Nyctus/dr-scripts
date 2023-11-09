@@ -111,7 +111,7 @@ class ContainerScanner
 
     # if servant is not summoned, summon it
     if servant =~ /I could not/
-      DRCA.cast_spell({ 'abbrev' => 'ss', 'mana' => 1}, @settings)
+      DRCA.cast_spell({ 'abbrev' => 'ss', 'prep_time' => 5, 'mana' => 1}, @settings)
     end
 
     # cast Piercing Gaze on the servant to view its contents
