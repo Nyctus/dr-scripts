@@ -1,11 +1,9 @@
 custom_require.call(%w[common common-crafting common-items common-travel common-arcana])
 
 class ContainerScanner
-
-    def initialize
-
+  def initialize
     arg_definitions = [
-    [
+      [
         { name: 'preposition', regex: /\w+/, description: "Preposition or 'rummage' | Shadow Servant: use 'pg'" },
         { name: 'container', regex: /\w+/, description: 'Container to scan. Put multiple words in quotes (e.g. "my backpack" or "pouch on shelf"). For a Shadow Servant use \'servant\'' },
         { name: 'itemfind', regex: /\w+/i, optional: true, description: 'Name of item to find. Put multiple words in quotes. Not case-sensitive!' }
@@ -44,8 +42,6 @@ class ContainerScanner
 
     # squelch results from look/rummage/etc
     action = proc { |s|
-      if s =~ /^#{preposition.capitalize} the.*#{container.gsub(no_my, '')} you see (?:an?|some) (.*)\.$/ || /^You rummage through.*and see (?:an?|some) (.*)\.$/
-      end
     }
     DownstreamHook.add('scanner', action)
 
@@ -79,7 +75,7 @@ class ContainerScanner
       for index in 0..(listlength - 1) do
         foundlist.push(itemlist[index]) if findpattern =~ itemlist[index]
       end
-      itemlist = itemlist.sort_by { |item| item.downcase }
+      foundlist = foundlist.sort_by { |item| item.downcase }
       itemlist = foundlist
       itemlist.compact!
       listlength = itemlist.length
@@ -113,7 +109,7 @@ class ContainerScanner
       itemlist[index] = itemlist[index] + " (Qty: #{dupecount + 1})" if dupecount > 0
 
       # store current item for use as "previous" item in next loop iteration
-      previtem = itemlist[index]
+      # previtem = itemlist[index]
 
       # increase index and dupeindex to advance loop
       index += 1
@@ -122,8 +118,8 @@ class ContainerScanner
       # reset dupecount for next iteration
       dupecount = 0
     end
-    
-    DRC.message("Showing #{itemlist.length + total_dupes} items matching regex: #{findpattern.to_s}") if findpattern != nil
+
+    DRC.message("Showing #{itemlist.length + total_dupes} items matching regex: #{findpattern}") if findpattern != nil
 
     # if the list of items is not empty, print it out
     (itemlist.length > 0) ? print_list(itemlist) : respond('No results.')
@@ -140,7 +136,6 @@ class ContainerScanner
 
   # this method casts Piercing Gaze on the servant and collects the output into a string of comma separated values
   def peer_servant()
-
     # init an empty string
     servant_list = ''
 
@@ -149,15 +144,14 @@ class ContainerScanner
 
     # if servant is not summoned, summon it
     if servant =~ /I could not/
-      DRCA.cast_spell({ 'abbrev' => 'ss', 'prep_time' => 5, 'mana' => 1}, @settings)
+      DRCA.cast_spell({ 'abbrev' => 'ss', 'prep_time' => 5, 'mana' => 1 }, @settings)
     end
 
     # squelch pattern raw Piercing Gaze output from Shadow Servant
     action = proc { |s|
       if s =~ /^\s+.*/
-        s
         DRC.log_window(s, "none")
-        # /Within the belly of the Shadow Servant you see.*/ || /^\s+.*/ || 
+        # /Within the belly of the Shadow Servant you see.*/ || /^\s+.*/ ||
         # /^Your Servant is holding.*/
       end
     }
@@ -166,15 +160,15 @@ class ContainerScanner
     DownstreamHook.add('shadow_servant', action)
 
     # cast Piercing Gaze on the servant to view its contents
-    DRCA.cast_spell({ 'abbrev' => 'pg', 'mana' => 1, 'prep_time' => 1, 'cast' => 'cast servant'}, @settings)
+    DRCA.cast_spell({ 'abbrev' => 'pg', 'mana' => 1, 'prep_time' => 1, 'cast' => 'cast servant' }, @settings)
 
     # wait for the first line of results
-    waitfor /Within the belly of the Shadow Servant you see/
+    waitfor(/Within the belly of the Shadow Servant you see/)
 
     # loop through every returned line from the game window to generate a comma separated list
     doloop = true
     while doloop
-      servant_line = waitfor /^Your Servant is holding.*|.*/
+      servant_line = waitfor(/^Your Servant is holding.*|.*/)
       case servant_line
       when /^Your Servant is holding.*/
         # This match indicates the last line of results from the servant; break the loop
@@ -188,7 +182,7 @@ class ContainerScanner
 
     # Delete trailing comma and space and any leading articles (a, an, some)
     servant_list.delete_suffix!(', ')
-    servant_list.sub!(/^an? |^some /,"")
+    servant_list.sub!(/^an? |^some /, "")
 
     # Return the raw string with all of the Shadow Servant's contents
     return servant_list
