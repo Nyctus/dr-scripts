@@ -48,15 +48,21 @@ class ContainerScanner
     # depending on lookverb either use the patterns for external containers or containers in the player's inventory
     case lookverb
     when /look/
-      /^#{preposition.capitalize} the.*#{container.gsub(no_my, '')} you see (?:an?|some) (.*)\.$/ =~ DRC.bput("#{lookverb} #{lookstring}", /^#{preposition.capitalize} the.*#{container.gsub(no_my, '')} you see (.*)\.$/)
+      /^#{preposition.capitalize} the.*#{container.gsub(no_my, '')} you see (?:an?|some) (.*)\.$/ =~ DRC.bput("#{lookverb} #{lookstring}", /^#{preposition.capitalize} the.*#{container.gsub(no_my, '')} you see (.*)\.$/, /there is nothing \w+ there\.$/i)
       raw_list = $1
     when /rummage/
-      /^You rummage through.*and see (?:an?|some) (.*)\.$/ =~ DRC.bput("#{lookstring}", /^You rummage through.*and see (?:an?|some) (.*)\.$/)
+      /^You rummage through.*and see (?:an?|some) (.*)\.$/ =~ DRC.bput("#{lookstring}", /^You rummage through.*and see (?:an?|some) (.*)\.$/, /there is nothing \w+ there\.$/i)
       raw_list = $1
     end
 
     # remove hook to un-squelch things
     DownstreamHook.remove('scanner')
+
+    # if raw_list is empty, so is the container. Message and exit.
+    if raw_list == nil
+      DRC.message("The specified container is empty.")
+      return
+    end
 
     # if the container is 'servant' instead generate the raw data via the peer_servant() method
     if container.downcase == 'servant'
