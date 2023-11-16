@@ -1,0 +1,112 @@
+# sigilstack
+
+custom_require.call(%w[common common-items drinfomon])
+
+class SigilStack
+  include DRC
+  include DRCI
+
+  GET_ITEM_SUCCESS = [
+    /You get/,
+    /You are already holding that/
+  ]
+
+  def initialize
+    # Collect args from user and settings from YAML
+    settings = get_settings
+
+    # container info
+    container = settings.stacker_container
+    overflow = settings.stacker_overflow
+
+    # temp varaible that is updated with whichever stacker is currently held during main loop
+    tempstack = ''
+
+    # Trash precision threshold
+    trash_precision = settings.trash_precision
+
+    # main sigil and stacker interaction loop
+    while true
+      getscroll = DRC.bput("get sigil-scroll from my #{container}", GET_ITEM_SUCCESS, 'What were you')
+      case getscroll
+      when *GET_ITEM_SUCCESS
+        /On this scroll you see.*\(\d+\) (\w+) sigil.*\((\d+)\)\./ =~ DRC.bput('read my sigil-scroll', /On this scroll you see.*\(\d+\) (\w+) sigil.*\((\d+)\)\./)
+        sigiltype = $1.downcase
+        sigprecision = $2.to_i
+        DRC.message("#{sigiltype} #{sigprecision}")
+      else
+        DRC.message("Out of sigils.")
+        stow_hands
+        break
+      end
+
+      # swap to the correct stacker and stack scroll based on precision
+      settings.sigil_stackers.each do |mystacker|
+        # get min/max precision info for mystacker
+        DRC.message(mystacker['name'].to_s)
+        max = mystacker['max']
+        min = mystacker['min']
+
+        # compare sigil precision with min/max of mystacker
+        # get the stacker from container if not already held
+        if sigprecision <= max && sigprecision >= min
+          DRCI.put_away_item?(tempstack, container) if (tempstack != '' && tempstack != mystacker['name'])
+          DRCI.get_item_safe?(mystacker['name'], container) unless tempstack == mystacker['name']
+          tempstack = mystacker['name']
+        end
+      end
+
+      if sigprecision <= trash_precision
+        DRC.message("WARNING! DISCARDING THE FOLLOWING ITEM: #{sigiltype.capitalize} sigil-scroll with Precision: #{sigprecision}")
+        sleep(5)
+
+        # dispose of sigil if trash_precision setting exists, otherwise put the sigil in overflow
+        dispose_trash('sigil-scroll', settings.worn_trashcan, settings.worn_trashcan_verb) unless (trash_precision == 0 || trash_precision == nil)
+        DRCI.put_away_item?('sigil-scroll', overflow) unless trash_precision > 0
+      end
+
+      stackresult = '' # reset variable to empty string
+      # stack the scroll in the stacker. Abort script if full. Skip if sigil was trashed or if trash_precision is not set.
+      stackresult = bput("put my sigil-scroll in my #{tempstack}", 'You add', 'You rearrange', /looks completely full/) unless sigprecision < trash_precision
+      if stackresult =~ /looks completely full/
+        DRCI.put_away_item?('sigil-scroll', overflow)
+      end
+    end
+  end
+end
+
+SigilStack.new
+
+# stow_hands
+# bput("get my sigil #{stacker} from my #{container}", 'You get', 'You are already holding that')
+
+# while true
+# 	case bput("get sigil-scroll from my #{container}", 'You get a', 'What were you referring to')
+# 	when 'You get a'
+# 		stackresult = bput("put my sigil-scroll in my #{stacker}", 'You add', 'You rearrange', /looks completely full/)
+# 	when 'What were you referring to'
+# 		break
+# 	end
+# 	if stackresult =~ /looks completely full/
+# 		break
+# 	end
+# end
+
+# bput("put my #{stacker} in my #{container}", 'You put your')
+# stow_hands
+
+# swap to the correct stacker and stack scroll based on precision
+# case sigprecision
+# when hq_precision..100
+# 	DRCI.put_away_item?(stacker, container) if tempstack == stacker
+# 	DRCI.get_item_safe?(hq_stacker, container) unless tempstack == hq_stacker
+# 	tempstack = hq_stacker
+# when trash_precision..(hq_precision - 1)
+# 	DRCI.put_away_item?(hq_stacker, container) if tempstack == hq_stacker
+# 	DRCI.get_item_safe?(stacker, container) unless tempstack == stacker
+# 	tempstack = stacker
+# when 0..(trash_precision - 1)
+# 	DRC.message("WARNING! DISCARDING THE FOLLOWING ITEM: #{sigiltype.capitalize} sigil-scroll with Precision: #{sigprecision.to_s}")
+# 	sleep(1.5)
+# 	dispose_trash('sigil-scroll', settings.worn_trashcan, settings.worn_trashcan_verb)
+# end
