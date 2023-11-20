@@ -59,7 +59,7 @@ class ContainerScanner
     DownstreamHook.remove('scanner')
 
     # if raw_list is empty, so is the container. Message and exit.
-    if raw_list == nil
+    if raw_list == nil && lookverb != 'pg'
       DRC.message("The specified container is empty.")
       return
     end
